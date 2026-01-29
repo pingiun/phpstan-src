@@ -854,39 +854,44 @@ final class TypeCombinator
 				return [self::intersect($reducedArrayTypes[0], ...$accessoryTypes)];
 			}
 
-			$templateArrayType = null;
-			foreach ($arrayTypes as $arrayType) {
-				if (!$arrayType instanceof TemplateArrayType) {
-					$templateArrayType = null;
-					break;
+			// Only create general ArrayType if no overflow (data in $keyTypesForGeneralArray
+			// and $valueTypesForGeneralArray is complete). When overflow occurred, this data
+			// is incomplete, so fall through to reduceArrays(true) below.
+			if (!$overflowed) {
+				$templateArrayType = null;
+				foreach ($arrayTypes as $arrayType) {
+					if (!$arrayType instanceof TemplateArrayType) {
+						$templateArrayType = null;
+						break;
+					}
+
+					if ($templateArrayType !== null) {
+						continue;
+					}
+
+					$templateArrayType = $arrayType;
 				}
+
+				$arrayType = new ArrayType(
+					self::union(...$keyTypesForGeneralArray),
+					self::union(...self::optimizeConstantArrays($valueTypesForGeneralArray)),
+				);
 
 				if ($templateArrayType !== null) {
-					continue;
+					$arrayType = new TemplateArrayType(
+						$templateArrayType->getScope(),
+						$templateArrayType->getStrategy(),
+						$templateArrayType->getVariance(),
+						$templateArrayType->getName(),
+						$arrayType,
+						$templateArrayType->getDefault(),
+					);
 				}
 
-				$templateArrayType = $arrayType;
+				return [
+					self::intersect($arrayType, ...$accessoryTypes),
+				];
 			}
-
-			$arrayType = new ArrayType(
-				self::union(...$keyTypesForGeneralArray),
-				self::union(...self::optimizeConstantArrays($valueTypesForGeneralArray)),
-			);
-
-			if ($templateArrayType !== null) {
-				$arrayType = new TemplateArrayType(
-					$templateArrayType->getScope(),
-					$templateArrayType->getStrategy(),
-					$templateArrayType->getVariance(),
-					$templateArrayType->getName(),
-					$arrayType,
-					$templateArrayType->getDefault(),
-				);
-			}
-
-			return [
-				self::intersect($arrayType, ...$accessoryTypes),
-			];
 		}
 
 		$reducedArrayTypes = self::optimizeConstantArrays(self::reduceArrays($arrayTypes, true));
